@@ -74,7 +74,7 @@
   <p class="subtitle">Bounded automated implementation with independent verification</p>
 
   <div class="diagram-wrap">
-    <svg viewBox="0 0 1160 460" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 1160 480" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <!-- Arrow markers -->
         <marker id="arr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
@@ -158,65 +158,65 @@
       <!-- ROW 2: Resolved? decision               -->
       <!-- ═══════════════════════════════════════ -->
 
-      <!-- Diamond: Resolved? — center (886, 210), radius 52 -->
+      <!-- Diamond: Resolved? — center (886, 212), radius 60 -->
       <g filter="url(#shadow)">
-        <polygon points="886,158 938,210 886,262 834,210" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+        <polygon points="886,152 946,212 886,272 826,212" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
       </g>
-      <text x="886" y="214" text-anchor="middle" font-size="15" font-weight="700" fill="#92400e">Resolved?</text>
+      <text x="886" y="217" text-anchor="middle" font-size="15" font-weight="700" fill="#92400e">Resolved?</text>
 
       <!-- Arrow right: Resolved? → Stop: resolved ("Yes") -->
-      <line x1="938" y1="210" x2="990" y2="210" stroke="#cbd5e1" stroke-width="2.5" marker-end="url(#arr)"/>
-      <text x="960" y="200" text-anchor="middle" font-size="12" font-weight="700" fill="#22c55e">Yes</text>
+      <line x1="946" y1="212" x2="998" y2="212" stroke="#cbd5e1" stroke-width="2.5" marker-end="url(#arr)"/>
+      <text x="968" y="202" text-anchor="middle" font-size="12" font-weight="700" fill="#22c55e">Yes</text>
 
       <!-- Terminal: Stop: resolved -->
       <g filter="url(#shadow)">
-        <rect x="1000" y="190" width="144" height="40" rx="20" fill="#f0fdf4" stroke="#22c55e" stroke-width="2"/>
+        <rect x="1008" y="192" width="144" height="40" rx="20" fill="#f0fdf4" stroke="#22c55e" stroke-width="2"/>
       </g>
-      <text x="1072" y="215" text-anchor="middle" font-size="14" font-weight="700" fill="#166534">Stop: resolved</text>
+      <text x="1080" y="217" text-anchor="middle" font-size="14" font-weight="700" fill="#166534">Stop: resolved</text>
 
       <!-- Arrow down: Resolved? → Blocked? ("No") -->
-      <line x1="886" y1="262" x2="886" y2="296" stroke="#cbd5e1" stroke-width="2.5" marker-end="url(#arr)"/>
-      <text x="902" y="282" text-anchor="start" font-size="12" font-weight="700" fill="#ef4444">No</text>
+      <line x1="886" y1="272" x2="886" y2="306" stroke="#cbd5e1" stroke-width="2.5" marker-end="url(#arr)"/>
+      <text x="902" y="294" text-anchor="start" font-size="12" font-weight="700" fill="#ef4444">No</text>
 
       <!-- ═══════════════════════════════════════ -->
       <!-- ROW 3: Blocked? decision                -->
       <!-- ═══════════════════════════════════════ -->
 
-      <!-- Diamond: Blocked? — center (886, 358), radius 52 -->
+      <!-- Diamond: Blocked? — center (886, 366), radius 60 -->
       <g filter="url(#shadow)">
-        <polygon points="886,306 938,358 886,410 834,358" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+        <polygon points="886,306 946,366 886,426 826,366" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
       </g>
-      <text x="886" y="348" text-anchor="middle" font-size="12" font-weight="700" fill="#92400e">Blocked,</text>
-      <text x="886" y="362" text-anchor="middle" font-size="12" font-weight="700" fill="#92400e">stagnating,</text>
-      <text x="886" y="376" text-anchor="middle" font-size="12" font-weight="700" fill="#92400e">or iter 5?</text>
+      <text x="886" y="356" text-anchor="middle" font-size="11.5" font-weight="700" fill="#92400e">Blocked,</text>
+      <text x="886" y="370" text-anchor="middle" font-size="11.5" font-weight="700" fill="#92400e">stalled, or max</text>
+      <text x="886" y="384" text-anchor="middle" font-size="11.5" font-weight="700" fill="#92400e">iterations?</text>
 
       <!-- Arrow right: Blocked? → Stop: explicit reason ("Yes") -->
-      <line x1="938" y1="358" x2="990" y2="358" stroke="#cbd5e1" stroke-width="2.5" marker-end="url(#arr)"/>
-      <text x="960" y="348" text-anchor="middle" font-size="12" font-weight="700" fill="#22c55e">Yes</text>
+      <line x1="946" y1="366" x2="998" y2="366" stroke="#cbd5e1" stroke-width="2.5" marker-end="url(#arr)"/>
+      <text x="968" y="356" text-anchor="middle" font-size="12" font-weight="700" fill="#22c55e">Yes</text>
 
       <!-- Terminal: Stop: explicit reason -->
       <g filter="url(#shadow)">
-        <rect x="1000" y="338" width="155" height="40" rx="20" fill="#fef2f2" stroke="#ef4444" stroke-width="2"/>
+        <rect x="1008" y="346" width="144" height="40" rx="20" fill="#fef2f2" stroke="#ef4444" stroke-width="2"/>
       </g>
-      <text x="1077" y="354" text-anchor="middle" font-size="13" font-weight="700" fill="#991b1b">Stop: explicit</text>
-      <text x="1077" y="370" text-anchor="middle" font-size="13" font-weight="700" fill="#991b1b">reason</text>
+      <text x="1080" y="362" text-anchor="middle" font-size="13" font-weight="700" fill="#991b1b">Stop: explicit</text>
+      <text x="1080" y="378" text-anchor="middle" font-size="13" font-weight="700" fill="#991b1b">reason</text>
 
       <!-- ═══════════════════════════════════════ -->
       <!-- LOOP-BACK: Blocked? No → Claude Impl    -->
       <!-- ═══════════════════════════════════════ -->
 
       <!-- "No" label -->
-      <text x="808" y="352" text-anchor="end" font-size="12" font-weight="700" fill="#3b82f6">No</text>
+      <text x="800" y="360" text-anchor="end" font-size="12" font-weight="700" fill="#3b82f6">No</text>
 
       <!-- Dashed blue path: left from diamond, down, across bottom, up to Claude -->
-      <path d="M 834,358 L 780,358 L 780,432 L 476,432 L 476,108"
+      <path d="M 826,366 L 780,366 L 780,448 L 476,448 L 476,108"
             fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="8,5"
             stroke-linecap="round" stroke-linejoin="round"/>
       <!-- Up arrow at top of loop-back -->
       <polygon points="476,110 470,124 482,124" fill="#3b82f6"/>
 
-      <!-- "retry" label on loop-back -->
-      <text x="628" y="448" text-anchor="middle" font-size="11" font-weight="600" fill="#3b82f6" opacity="0.8">retry loop</text>
+      <!-- "loop" label on loop-back -->
+      <text x="628" y="464" text-anchor="middle" font-size="11" font-weight="600" fill="#3b82f6" opacity="0.8">loop</text>
 
     </svg>
   </div>
