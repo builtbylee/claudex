@@ -29,6 +29,7 @@ Requirements:
 - `python3`
 - `claude` CLI installed and logged in
 - `codex` CLI installed and logged in
+- macOS or Linux shell environment
 
 ## Verify
 
@@ -38,6 +39,7 @@ In Claude Code:
 2. confirm these appear:
    - `codex-plan-review`
    - `codex-remediation-loop`
+3. if they do not appear immediately, restart Claude Code once and run `/agents` again
 
 ## Remediation Loop Workflow
 
@@ -125,3 +127,8 @@ Or locally:
 ```bash
 ./uninstall.sh
 ```
+
+## Notes
+
+- the installer is shell-based; Windows users would need WSL or a manual install path
+- the remediation loop depends on both local CLIs working: `claude` and `codex`
