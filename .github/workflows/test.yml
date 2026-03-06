@@ -25,6 +25,7 @@ jobs:
 
           test -f "$HOME/.claude/agents/codex-plan-review.md"
           test -f "$HOME/.claude/agents/codex-remediation-loop.md"
+          test -f "$HOME/.claude/commands/claudex.md"
           test -f "$HOME/.claude/hooks/codex_plan_review.py"
           test -f "$HOME/.claude/tools/codex-remediation-loop/codex_remediation_loop.py"
           test -f "$HOME/.claude/tools/codex-remediation-loop/schemas/plan-edit.schema.json"
@@ -51,5 +52,6 @@ jobs:
 
           test ! -e "$HOME/.claude/agents/codex-plan-review.md"
           test ! -e "$HOME/.claude/agents/codex-remediation-loop.md"
+          test ! -e "$HOME/.claude/commands/claudex.md"
           test ! -e "$HOME/.claude/hooks/codex_plan_review.py"
           test ! -e "$HOME/.claude/tools/codex-remediation-loop"

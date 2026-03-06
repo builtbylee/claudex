@@ -1,6 +1,6 @@
 # Claudex
 
-[![Test](https://github.com/builtbylee/claude-codex-remediation-loop/actions/workflows/test.yml/badge.svg)](https://github.com/builtbylee/claude-codex-remediation-loop/actions/workflows/test.yml)
+[![Test](https://github.com/builtbylee/claudex/actions/workflows/test.yml/badge.svg)](https://github.com/builtbylee/claudex/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-black.svg)](./LICENSE)
 
 Claudex gives Claude Code an independent Codex reviewer so plans and implementations are checked before they ship.
@@ -22,7 +22,7 @@ Claudex gives Claude Code an independent Codex reviewer so plans and implementat
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/builtbylee/claude-codex-remediation-loop/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/builtbylee/claudex/main/install.sh | bash
 ```
 
 Requirements:
@@ -40,7 +40,8 @@ In Claude Code:
 2. confirm these appear:
    - `codex-plan-review`
    - `codex-remediation-loop`
-3. if they do not appear immediately, restart Claude Code once and run `/agents` again
+3. run `/claudex /absolute/path/to/PLAN.md` to trigger the full workflow
+4. if the agents do not appear immediately, restart Claude Code once and run `/agents` again
 
 <img src="./assets/agents-view.png" alt="Claude Code /agents view showing codex-plan-review and codex-remediation-loop" width="680" />
 
@@ -59,6 +60,12 @@ Use the codex-plan-review subagent to review /absolute/path/to/PLAN.md
 Full two-phase remediation loop:
 
 ```text
+/claudex /absolute/path/to/PLAN.md
+```
+
+Equivalent subagent invocation:
+
+```text
 Use the codex-remediation-loop subagent to run the remediation loop for /absolute/path/to/PLAN.md
 ```
 
@@ -75,6 +82,7 @@ python3 ~/.claude/tools/codex-remediation-loop/codex_remediation_loop.py loop \
 
 - `~/.claude/agents/codex-plan-review.md`
 - `~/.claude/agents/codex-remediation-loop.md`
+- `~/.claude/commands/claudex.md`
 - `~/.claude/hooks/codex_plan_review.py`
 - `~/.claude/tools/codex-remediation-loop/`
 - automatic plan-review hook merged into `~/.claude/settings.json`
@@ -112,7 +120,7 @@ Example:
 ## Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/builtbylee/claude-codex-remediation-loop/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/builtbylee/claudex/main/uninstall.sh | bash
 ```
 
 Or locally:

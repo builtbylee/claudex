@@ -8,6 +8,7 @@ from typing import Any
 
 CLAUDE_ROOT = Path.home() / ".claude"
 AGENTS_DIR = CLAUDE_ROOT / "agents"
+COMMANDS_DIR = CLAUDE_ROOT / "commands"
 HOOKS_DIR = CLAUDE_ROOT / "hooks"
 TOOLS_DIR = CLAUDE_ROOT / "tools" / "codex-remediation-loop"
 SETTINGS_PATH = CLAUDE_ROOT / "settings.json"
@@ -58,6 +59,7 @@ def main() -> int:
     for path in (
         AGENTS_DIR / "codex-plan-review.md",
         AGENTS_DIR / "codex-remediation-loop.md",
+        COMMANDS_DIR / "claudex.md",
         HOOKS_DIR / "codex_plan_review.py",
     ):
         path.unlink(missing_ok=True)

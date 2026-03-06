@@ -9,6 +9,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 CLAUDE_ROOT = Path.home() / ".claude"
 AGENTS_DIR = CLAUDE_ROOT / "agents"
+COMMANDS_DIR = CLAUDE_ROOT / "commands"
 HOOKS_DIR = CLAUDE_ROOT / "hooks"
 TOOLS_DIR = CLAUDE_ROOT / "tools" / "codex-remediation-loop"
 SETTINGS_PATH = CLAUDE_ROOT / "settings.json"
@@ -76,12 +77,14 @@ def ensure_hook(settings: dict[str, Any]) -> dict[str, Any]:
 def main() -> int:
     copy_file(ROOT / "agents" / "codex-plan-review.md", AGENTS_DIR / "codex-plan-review.md")
     copy_file(ROOT / "agents" / "codex-remediation-loop.md", AGENTS_DIR / "codex-remediation-loop.md")
+    copy_file(ROOT / "commands" / "claudex.md", COMMANDS_DIR / "claudex.md")
     copy_file(ROOT / "hooks" / "codex_plan_review.py", HOOKS_DIR / "codex_plan_review.py")
     copy_tree(ROOT / "tools" / "codex-remediation-loop", TOOLS_DIR)
     settings = ensure_hook(read_json(SETTINGS_PATH))
     write_json(SETTINGS_PATH, settings)
     print("Installed Claude/Codex remediation workflow into ~/.claude")
     print("Run /agents in Claude Code and look for codex-plan-review and codex-remediation-loop.")
+    print("Run /claudex <plan-path> in Claude Code to trigger the full workflow.")
     return 0
 
 
