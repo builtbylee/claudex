@@ -5,8 +5,8 @@
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
       <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0f172a" flood-opacity="0.08"/>
     </filter>
-    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
-      <path d="M0 0L9 4.5L0 9V0Z" fill="#334155"/>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto">
+      <path d="M0 0L8 4L0 8V0Z" fill="#334155"/>
     </marker>
     <style>
       .title { font: 700 30px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
@@ -15,7 +15,7 @@
       .body { font: 500 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
       .badge { font: 700 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: white; }
       .label { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; }
-      .line { stroke: #334155; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; fill: none; marker-end: url(#arrow); }
+      .line { stroke: #334155; stroke-width: 3.25; stroke-linecap: round; stroke-linejoin: round; fill: none; marker-end: url(#arrow); }
       .panel { filter: url(#shadow); }
     </style>
   </defs>
@@ -72,6 +72,11 @@
   <path d="M600 664V704" class="line"/>
 
   <g class="panel">
+    <rect x="456" y="832" width="288" height="48" rx="18" fill="#F1F5F9" stroke="#64748B" stroke-width="2.5"/>
+    <text x="600" y="862" text-anchor="middle" class="heading">Controller decision</text>
+  </g>
+
+  <g class="panel">
     <rect x="90" y="850" width="300" height="92" rx="24" fill="#DCFCE7" stroke="#15803D" stroke-width="3"/>
     <text x="240" y="892" text-anchor="middle" class="heading">Stop: resolved</text>
     <text x="240" y="918" text-anchor="middle" class="body">All must-fix findings closed</text>
@@ -89,14 +94,11 @@
     <text x="960" y="918" text-anchor="middle" class="body">Blocked, stagnating, or iteration 5</text>
   </g>
 
-  <path d="M600 814V834L240 834V850" class="line"/>
-  <path d="M600 814V850" class="line"/>
-  <path d="M600 814V834L960 834V850" class="line"/>
+  <path d="M600 814V832" class="line"/>
+  <path d="M520 880V896H240V850" class="line"/>
+  <path d="M600 880V850" class="line"/>
+  <path d="M680 880V896H960V850" class="line"/>
 
-  <path d="M750 896H1128C1144 896 1158 882 1158 866V476C1158 444 1132 418 1100 418H910" class="line"/>
-
-  <text x="220" y="828" class="label">Resolved</text>
-  <text x="620" y="838" class="label">Continue</text>
-  <text x="932" y="828" class="label">Stop</text>
-  <text x="1172" y="650" class="label">Loop</text>
+  <path d="M750 896H1132C1148 896 1160 884 1160 868V476C1160 444 1134 418 1102 418H910" class="line"/>
+  <text x="1174" y="650" class="label">Loop</text>
 </svg>
