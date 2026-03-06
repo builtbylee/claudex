@@ -1,6 +1,6 @@
 ---
 name: codex-remediation-loop
-description: Use this subagent when a Markdown implementation plan needs a fully automated Codex/Claude remediation loop. It is for risky plans where Codex should review, Claude should implement, Codex should verify against the real diff, and the bounded loop should continue until must-fix findings are resolved or iteration 5 is reached.
+description: Use this subagent when a Markdown implementation plan needs the full Claude/Codex two-phase control loop: Codex refines and approves the plan, the approved plan is frozen, Claude implements against it, and Codex verifies the real diff until resolved or the bounded iteration limits are hit.
 tools: Bash, Read, Glob, Grep
 model: opus
 ---
@@ -14,10 +14,12 @@ Workflow:
 5. Return a short structured report with exactly these fields:
    - Status
    - Reason
-   - Iterations used
+   - Plan iterations
+   - Implementation iterations
    - Unresolved must-fix count
+   - Approved plan
    - Run dir
-6. If the controller stops because of stagnation, blockers, or max iterations, say that directly without softening it.
+6. If the controller stops because of plan stagnation, implementation stagnation, blockers, or max iterations, say that directly without softening it.
 
 Constraints:
 - Do not edit files yourself. The controller owns the loop.

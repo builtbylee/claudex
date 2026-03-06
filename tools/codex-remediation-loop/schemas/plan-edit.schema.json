@@ -1,0 +1,72 @@
+{
+  "type": "object",
+  "required": [
+    "overall_status",
+    "summary",
+    "changed_plan",
+    "findings",
+    "next_actions"
+  ],
+  "properties": {
+    "overall_status": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "continue",
+        "blocked"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "changed_plan": {
+      "type": "boolean"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "title",
+          "details",
+          "acceptance_criteria"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "must_fix",
+              "should_fix",
+              "advisory"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "details": {
+            "type": "string"
+          },
+          "acceptance_criteria": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

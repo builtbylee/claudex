@@ -2,17 +2,16 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import os
-import shutil
 import subprocess
-import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 DEFAULT_MAX_ITERATIONS = 5
 DEFAULT_CODEX_MODEL = "gpt-5.4"
@@ -44,12 +43,16 @@ IGNORE_SUFFIXES = {".pyc", ".pyo", ".so", ".dll", ".dylib", ".png", ".jpg", ".jp
 class RunPaths:
     root: Path
     meta: Path
-    review: Path
     final_summary_json: Path
     final_summary_md: Path
+    approved_plan: Path
+    approved_plan_meta: Path
 
-    def iteration_dir(self, iteration: int) -> Path:
-        return self.root / f"iteration-{iteration:02d}"
+    def plan_iteration_dir(self, iteration: int) -> Path:
+        return self.root / "plan-phase" / f"iteration-{iteration:02d}"
+
+    def implementation_iteration_dir(self, iteration: int) -> Path:
+        return self.root / "implementation-phase" / f"iteration-{iteration:02d}"
 
 
 def utc_now() -> str:
@@ -125,14 +128,14 @@ def run_codex_structured(
     cwd: Path,
     model: str,
     timeout_seconds: int,
+    sandbox: str,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    with tempfile.NamedTemporaryFile("r", delete=False) as handle:
-        output_path = Path(handle.name)
+    output_path = cwd / ".codex-last-message.json"
     cmd = [
         "codex",
         "exec",
         "-s",
-        "read-only",
+        sandbox,
         "--skip-git-repo-check",
         "--ephemeral",
         "--color",
@@ -261,6 +264,17 @@ def git_diff(workspace: Path, changed: list[str]) -> str:
     return completed.stdout[:20_000]
 
 
+def text_diff(before: str, after: str, *, from_name: str, to_name: str) -> str:
+    return "".join(
+        difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile=from_name,
+            tofile=to_name,
+        )
+    )
+
+
 def file_snapshots(workspace: Path, changed: list[str], *, max_files: int = 12, max_chars: int = 5_000) -> list[dict[str, str]]:
     snapshots: list[dict[str, str]] = []
     for rel in changed[:max_files]:
@@ -333,91 +347,95 @@ def run_validation_commands(workspace: Path, commands: list[dict[str, str]], tim
     return {"status": "passed" if overall_passed else "failed", "commands": results}
 
 
-def initial_review_prompt(plan_path: Path, plan_body: str, truncated: bool) -> str:
-    truncation = "The plan body was truncated for prompt size.\n\n" if truncated else ""
+def plan_review_prompt(
+    *,
+    sandbox_plan_path: Path,
+    current_plan_body: str,
+    truncated: bool,
+    latest_plan_review: dict[str, Any] | None,
+    iteration: int,
+) -> str:
+    truncation = "The plan body was truncated for prompt size. Edit the actual file in the workspace, not the truncated excerpt.\n\n" if truncated else ""
     return (
-        "Review the implementation plan below. Return only structured output that matches the schema.\n"
-        "Assign stable finding IDs in the form F1, F2, F3.\n"
-        "Every finding must include severity and concrete acceptance criteria.\n"
-        "Use severities: must_fix, should_fix, advisory.\n"
-        "Verdict meanings:\n"
-        "- APPROVE: no material issues\n"
-        "- CONCERNS: fixable but incomplete or risky\n"
-        "- BLOCK: unsafe to approve as written\n\n"
-        f"Plan file: {plan_path}\n\n"
+        "You are refining a Markdown implementation plan.\n"
+        "You may edit only the plan file in the current workspace. Do not create or modify any other files.\n"
+        "Update the plan directly until it is approval-ready. Then return only structured output matching the schema.\n"
+        "Use overall_status values as follows:\n"
+        "- approved: the edited plan is ready to freeze and implement\n"
+        "- continue: you improved the plan but meaningful issues still remain\n"
+        "- blocked: the plan cannot be brought to approval without missing requirements or contradictory constraints\n"
+        "Reuse previous finding IDs when the same issue persists.\n"
+        "If you fix a finding in the plan, remove it from the output instead of renaming it.\n\n"
+        f"Iteration: {iteration}\n"
+        f"Editable plan file: {sandbox_plan_path.name}\n\n"
         f"{truncation}"
-        "Plan content:\n"
-        f"{plan_body}"
+        "Current plan excerpt:\n"
+        f"{current_plan_body}\n\n"
+        "Previous Codex plan review:\n"
+        f"{json.dumps(latest_plan_review, indent=2) if latest_plan_review else 'null'}"
     )
 
 
 def implementation_prompt(
     *,
     plan_path: Path,
-    plan_body: str,
-    review: dict[str, Any],
+    approved_plan_body: str,
     latest_verification: dict[str, Any] | None,
     iteration: int,
 ) -> str:
-    target_findings = review.get("findings", []) if latest_verification is None else latest_verification.get("unresolved", [])
+    unresolved = [] if latest_verification is None else latest_verification.get("unresolved", [])
     regressions = [] if latest_verification is None else latest_verification.get("regressions", [])
-    guidance = [] if latest_verification is None else latest_verification.get("next_actions", [])
-    findings_note = (
-        "Codex reported no open findings on the plan itself. That does NOT mean the work is done. "
-        "You still need to implement the plan in the workspace and make the validation pass.\n"
-        if not target_findings and latest_verification is None
-        else ""
+    next_actions = [] if latest_verification is None else latest_verification.get("next_actions", [])
+    verification_context = (
+        "This is the first implementation pass. Focus on implementing the frozen approved plan completely.\n"
+        if latest_verification is None
+        else "Resolve all remaining must-fix items before touching should-fix or advisory items.\n"
     )
     return (
-        "You are executing a bounded remediation pass against Codex findings.\n"
-        "Your job is to implement the plan in the workspace and also satisfy any unresolved Codex findings.\n"
-        "Codex findings are additional constraints. The plan itself remains the primary implementation task.\n"
-        "Work in one pass across all must_fix findings before touching should_fix items.\n"
-        "Read relevant files before editing. Prefer the smallest change that satisfies acceptance criteria.\n"
-        "Do not run tests, linters, or shell commands. The controller will do that.\n"
-        "Do not write status reports, plans, or extra documentation unless required by the findings.\n"
-        "If a finding is contradictory or impossible to satisfy from repo context, stop and explain that clearly.\n"
-        "When you are done, respond with a short plain-text summary only.\n\n"
+        "You are executing a bounded implementation pass against a frozen approved plan.\n"
+        "The approved plan is the source of truth. Implement it in the workspace.\n"
+        f"Do not edit the plan file at {plan_path}. The controller will revert it if you change it.\n"
+        "Do not run tests, linters, build commands, or shell commands. The controller will do that.\n"
+        "Read relevant files before editing. Prefer the smallest coherent set of code changes that satisfies the approved plan and all open must-fix items.\n"
+        "If the approved plan is contradictory or impossible from the repo context, say that plainly in your short response.\n"
+        "Respond with a short plain-text summary only.\n\n"
         f"Iteration: {iteration}\n"
-        f"Plan file: {plan_path}\n"
-        f"Original verdict: {review.get('verdict')}\n\n"
-        f"{findings_note}\n"
-        "Original plan content:\n"
-        f"{plan_body}\n\n"
-        "Target findings to resolve now:\n"
-        f"{json.dumps(target_findings, indent=2)}\n\n"
+        f"Frozen plan file: {plan_path}\n\n"
+        f"{verification_context}\n"
+        "Frozen approved plan:\n"
+        f"{approved_plan_body}\n\n"
+        "Open unresolved findings from implementation verification:\n"
+        f"{json.dumps(unresolved, indent=2)}\n\n"
         "Current regressions:\n"
         f"{json.dumps(regressions, indent=2)}\n\n"
         "Codex next actions:\n"
-        f"{json.dumps(guidance, indent=2)}"
+        f"{json.dumps(next_actions, indent=2)}"
     )
 
 
 def verification_prompt(
     *,
     plan_path: Path,
-    plan_body: str,
-    review: dict[str, Any],
+    approved_plan_body: str,
     latest_verification: dict[str, Any] | None,
     validation: dict[str, Any],
     changed: list[str],
     diff_text: str,
     snapshots: list[dict[str, str]],
     iteration: int,
+    plan_mutation_detected: bool,
 ) -> str:
     return (
-        "Verify whether the implementation work resolves the original findings.\n"
+        "Verify whether the implementation work satisfies the frozen approved plan.\n"
         "Return only structured output matching the schema.\n"
-        "Use the original finding IDs exactly. Do not invent new IDs for original findings.\n"
-        "You may add regression IDs like R1 for new regressions.\n"
-        "Be strict: unresolved means unresolved. insufficient_evidence means the claim cannot be verified from the provided data.\n\n"
+        "Use original unresolved IDs exactly when they persist. You may add regression IDs like R1 for new regressions.\n"
+        "Be strict: unresolved means unresolved. blocked means further progress requires missing context or contradictory requirements.\n\n"
         f"Iteration: {iteration}\n"
-        f"Plan file: {plan_path}\n\n"
-        "Original plan content:\n"
-        f"{plan_body}\n\n"
-        "Original review:\n"
-        f"{json.dumps(review, indent=2)}\n\n"
-        "Previous verification:\n"
+        f"Frozen plan path: {plan_path}\n"
+        f"Frozen plan mutated during implementation pass: {str(plan_mutation_detected).lower()}\n\n"
+        "Frozen approved plan:\n"
+        f"{approved_plan_body}\n\n"
+        "Previous implementation verification:\n"
         f"{json.dumps(latest_verification, indent=2) if latest_verification else 'null'}\n\n"
         "Validation results:\n"
         f"{json.dumps(validation, indent=2)}\n\n"
@@ -430,6 +448,10 @@ def verification_prompt(
     )
 
 
+def plan_must_fix_count(review: dict[str, Any]) -> int:
+    return sum(1 for item in review.get("findings", []) if item.get("severity") == "must_fix")
+
+
 def unresolved_must_fix_count(verification: dict[str, Any]) -> int:
     unresolved = verification.get("unresolved", [])
     regressions = verification.get("regressions", [])
@@ -438,40 +460,72 @@ def unresolved_must_fix_count(verification: dict[str, Any]) -> int:
     return count
 
 
-def controller_decision(
+def plan_signature(review: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(sorted(str(item.get("id")) for item in review.get("findings", []) if item.get("severity") == "must_fix"))
+
+
+def verification_signature(verification: dict[str, Any]) -> tuple[str, ...]:
+    unresolved_ids = [str(item.get("id")) for item in verification.get("unresolved", []) if item.get("severity") == "must_fix"]
+    regression_ids = [str(item.get("id")) for item in verification.get("regressions", []) if item.get("severity") == "must_fix"]
+    return tuple(sorted(unresolved_ids + regression_ids))
+
+
+def stagnation_rounds(
+    records: list[dict[str, Any]],
+    *,
+    count_fn: Callable[[dict[str, Any]], int],
+    signature_fn: Callable[[dict[str, Any]], tuple[str, ...]],
+) -> int:
+    if len(records) < 2:
+        return 0
+    rounds = 0
+    for index in range(len(records) - 1, 0, -1):
+        newer = records[index]
+        older = records[index - 1]
+        if count_fn(newer) >= count_fn(older) and signature_fn(newer) == signature_fn(older):
+            rounds += 1
+        else:
+            break
+    return rounds
+
+
+def plan_controller_decision(
+    *,
+    reviews: list[dict[str, Any]],
+    iteration: int,
+    max_iterations: int,
+) -> dict[str, Any]:
+    latest = reviews[-1]
+    if latest.get("overall_status") == "approved" and plan_must_fix_count(latest) == 0:
+        return {"action": "approve_plan", "reason": "Codex approved the plan and no must-fix findings remain."}
+    if iteration >= max_iterations:
+        return {"action": "stop_plan_max_iterations", "reason": f"Reached max plan iterations ({max_iterations})."}
+    if latest.get("overall_status") == "blocked":
+        return {"action": "stop_plan_blocked", "reason": latest.get("summary", "Plan approval is blocked.")}
+    if stagnation_rounds(reviews, count_fn=plan_must_fix_count, signature_fn=plan_signature) >= 2:
+        return {"action": "stop_plan_stagnating", "reason": "Plan must-fix findings did not improve for two consecutive plan-review rounds."}
+    return {"action": "continue", "reason": "Plan still has unresolved issues but further refinement is possible."}
+
+
+def implementation_controller_decision(
     *,
     verifications: list[dict[str, Any]],
     iteration: int,
     max_iterations: int,
 ) -> dict[str, Any]:
     latest = verifications[-1]
-    current_count = unresolved_must_fix_count(latest)
-    previous_count = unresolved_must_fix_count(verifications[-2]) if len(verifications) > 1 else None
-    stagnating = previous_count is not None and current_count >= previous_count
-    stagnation_rounds = 1
-    if stagnating:
-        for idx in range(len(verifications) - 1, 0, -1):
-            newer = unresolved_must_fix_count(verifications[idx])
-            older = unresolved_must_fix_count(verifications[idx - 1])
-            if newer >= older:
-                stagnation_rounds += 1
-            else:
-                break
-    else:
-        stagnation_rounds = 0
-
     validation_status = latest.get("validation_status")
     has_regression = bool(latest.get("regressions"))
     ready_to_approve = bool(latest.get("ready_to_approve"))
 
-    if current_count == 0 and not has_regression and ready_to_approve and validation_status in {"passed", "skipped"}:
+    if unresolved_must_fix_count(latest) == 0 and not has_regression and ready_to_approve and validation_status in {"passed", "skipped"}:
         return {"action": "stop_resolved", "reason": "All must-fix findings resolved and no regressions remain."}
     if iteration >= max_iterations:
-        return {"action": "stop_max_iterations", "reason": f"Reached max iterations ({max_iterations})."}
+        return {"action": "stop_max_iterations", "reason": f"Reached max implementation iterations ({max_iterations})."}
     if latest.get("overall_status") == "blocked":
-        return {"action": "stop_blocked", "reason": latest.get("summary", "Verification blocked progress.")}
-    if stagnation_rounds >= 2:
-        return {"action": "stop_stagnating", "reason": "Must-fix count did not decrease for two consecutive rounds."}
+        return {"action": "stop_blocked", "reason": latest.get("summary", "Implementation verification blocked progress.")}
+    if stagnation_rounds(verifications, count_fn=unresolved_must_fix_count, signature_fn=verification_signature) >= 2:
+        return {"action": "stop_stagnating", "reason": "Implementation must-fix findings did not improve for two consecutive verification rounds."}
     return {"action": "continue", "reason": "Unresolved must-fix findings remain and progress is still possible."}
 
 
@@ -479,13 +533,20 @@ def run_paths(root: Path) -> RunPaths:
     return RunPaths(
         root=root,
         meta=root / "run.json",
-        review=root / "review.json",
         final_summary_json=root / "final-summary.json",
         final_summary_md=root / "final-summary.md",
+        approved_plan=root / "approved-plan.md",
+        approved_plan_meta=root / "approved-plan.json",
     )
 
 
-def init_run(plan: Path, workspace: Path, *, max_iterations: int) -> RunPaths:
+def init_run(
+    plan: Path,
+    workspace: Path,
+    *,
+    max_plan_iterations: int,
+    max_implementation_iterations: int,
+) -> RunPaths:
     root = DEFAULT_STATE_ROOT / f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
     root.mkdir(parents=True, exist_ok=False)
     paths = run_paths(root)
@@ -496,58 +557,185 @@ def init_run(plan: Path, workspace: Path, *, max_iterations: int) -> RunPaths:
             "created_at": utc_now(),
             "plan_path": str(plan),
             "workspace": str(workspace),
-            "max_iterations": max_iterations,
+            "max_plan_iterations": max_plan_iterations,
+            "max_implementation_iterations": max_implementation_iterations,
         },
     )
     return paths
 
 
-def latest_verification(paths: RunPaths) -> dict[str, Any] | None:
-    verifications = sorted(paths.root.glob("iteration-*/verification.json"))
-    if not verifications:
-        return None
-    return read_json(verifications[-1])
+def stage_plan_workspace(plan: Path, sandbox_root: Path) -> Path:
+    sandbox_root.mkdir(parents=True, exist_ok=True)
+    sandbox_plan = sandbox_root / plan.name
+    sandbox_plan.write_text(plan.read_text(encoding="utf-8"), encoding="utf-8")
+    return sandbox_plan
 
 
-def run_loop(plan: Path, workspace: Path, max_iterations: int) -> dict[str, Any]:
+def freeze_approved_plan(paths: RunPaths, plan: Path, approved_body: str, *, plan_iteration: int, codex_model: str) -> dict[str, Any]:
+    write_text(paths.approved_plan, approved_body)
+    plan.write_text(approved_body, encoding="utf-8")
+    metadata = {
+        "frozen_at": utc_now(),
+        "source_plan_path": str(plan),
+        "approved_plan_path": str(paths.approved_plan),
+        "approved_plan_sha256": hashlib.sha256(approved_body.encode("utf-8")).hexdigest(),
+        "plan_iteration": plan_iteration,
+        "codex_model": codex_model,
+    }
+    write_json(paths.approved_plan_meta, metadata)
+    return metadata
+
+
+def append_plan_mutation_regression(verification: dict[str, Any], plan_path: Path) -> None:
+    regressions = verification.setdefault("regressions", [])
+    regressions.append(
+        {
+            "id": "R_PLAN_MUTATION",
+            "severity": "must_fix",
+            "title": "Frozen approved plan was modified",
+            "reason": f"Claude changed the frozen approved plan during implementation: {plan_path}",
+        }
+    )
+    summary = verification.get("summary", "")
+    extra = "Frozen approved plan was modified during implementation and was restored by the controller."
+    verification["summary"] = f"{summary} {extra}".strip()
+    actions = verification.setdefault("next_actions", [])
+    actions.append("Do not edit the frozen approved plan file during implementation.")
+
+
+def write_final_summary(paths: RunPaths, summary: dict[str, Any]) -> None:
+    write_json(paths.final_summary_json, summary)
+    lines = [
+        "# Codex Remediation Loop",
+        "",
+        f"Status: {summary.get('status')}",
+        "",
+        f"Reason: {summary.get('reason')}",
+        "",
+        f"Run dir: {summary.get('run_dir')}",
+        "",
+        f"Plan iterations used: {summary.get('plan_iterations_used', 0)}",
+        "",
+        f"Implementation iterations used: {summary.get('implementation_iterations_used', 0)}",
+        "",
+        f"Unresolved must-fix: {summary.get('unresolved_must_fix_count', 0)}",
+    ]
+    if summary.get("approved_plan_path"):
+        lines.extend(["", f"Approved plan: {summary['approved_plan_path']}"])
+    write_text(paths.final_summary_md, "\n".join(lines) + "\n")
+
+
+def run_loop(
+    plan: Path,
+    workspace: Path,
+    max_plan_iterations: int,
+    max_implementation_iterations: int,
+) -> dict[str, Any]:
     config = load_workspace_config(workspace)
-    paths = init_run(plan, workspace, max_iterations=max_iterations)
+    paths = init_run(
+        plan,
+        workspace,
+        max_plan_iterations=max_plan_iterations,
+        max_implementation_iterations=max_implementation_iterations,
+    )
     codex_model = str(config.get("codex_model") or DEFAULT_CODEX_MODEL)
     claude_model = str(config.get("claude_model") or DEFAULT_CLAUDE_MODEL)
     allowed_tools = str(config.get("claude_allowed_tools") or DEFAULT_ALLOWED_TOOLS)
-    plan_body, truncated = plan_text(plan)
 
-    review_prompt = initial_review_prompt(plan, plan_body, truncated)
-    write_text(paths.root / "review-prompt.txt", review_prompt)
-    review_data, review_error = run_codex_structured(
-        prompt=review_prompt,
-        schema_path=relative_schema_dir() / "review.schema.json",
-        cwd=workspace,
-        model=codex_model,
-        timeout_seconds=DEFAULT_CODEX_TIMEOUT_SECONDS,
-    )
-    if review_error or review_data is None:
+    plan_reviews: list[dict[str, Any]] = []
+    approved_plan_body: str | None = None
+    approved_plan_meta: dict[str, Any] | None = None
+
+    for iteration in range(1, max_plan_iterations + 1):
+        iteration_dir = paths.plan_iteration_dir(iteration)
+        sandbox_root = iteration_dir / "sandbox"
+        sandbox_plan = stage_plan_workspace(plan, sandbox_root)
+        current_plan_body, truncated = plan_text(plan)
+        write_text(iteration_dir / "plan-before.md", current_plan_body)
+
+        prompt = plan_review_prompt(
+            sandbox_plan_path=sandbox_plan,
+            current_plan_body=current_plan_body,
+            truncated=truncated,
+            latest_plan_review=plan_reviews[-1] if plan_reviews else None,
+            iteration=iteration,
+        )
+        write_text(iteration_dir / "codex-prompt.txt", prompt)
+        review_data, review_error = run_codex_structured(
+            prompt=prompt,
+            schema_path=relative_schema_dir() / "plan-edit.schema.json",
+            cwd=sandbox_root,
+            model=codex_model,
+            timeout_seconds=DEFAULT_CODEX_TIMEOUT_SECONDS,
+            sandbox="workspace-write",
+        )
+        if review_error or review_data is None:
+            summary = {
+                "status": "failed",
+                "reason": review_error or "Codex plan refinement failed.",
+                "run_dir": str(paths.root),
+                "plan_iterations_used": iteration - 1,
+                "implementation_iterations_used": 0,
+                "unresolved_must_fix_count": plan_must_fix_count(plan_reviews[-1]) if plan_reviews else 0,
+            }
+            write_final_summary(paths, summary)
+            return summary
+
+        updated_plan_body = sandbox_plan.read_text(encoding="utf-8")
+        write_text(iteration_dir / "plan-after.md", updated_plan_body)
+        write_text(
+            iteration_dir / "plan-diff.patch",
+            text_diff(current_plan_body, updated_plan_body, from_name=f"{plan.name} (before)", to_name=f"{plan.name} (after)"),
+        )
+        plan.write_text(updated_plan_body, encoding="utf-8")
+        review_data["iteration"] = iteration
+        review_data["changed_plan"] = current_plan_body != updated_plan_body
+        write_json(iteration_dir / "plan-review.json", review_data)
+        plan_reviews.append(review_data)
+
+        decision = plan_controller_decision(reviews=plan_reviews, iteration=iteration, max_iterations=max_plan_iterations)
+        write_json(iteration_dir / "controller-decision.json", decision)
+        if decision["action"] == "approve_plan":
+            approved_plan_body = updated_plan_body
+            approved_plan_meta = freeze_approved_plan(paths, plan, approved_plan_body, plan_iteration=iteration, codex_model=codex_model)
+            break
+        if decision["action"] != "continue":
+            summary = {
+                "status": decision["action"],
+                "reason": decision["reason"],
+                "run_dir": str(paths.root),
+                "plan_iterations_used": iteration,
+                "implementation_iterations_used": 0,
+                "unresolved_must_fix_count": plan_must_fix_count(review_data),
+            }
+            write_final_summary(paths, summary)
+            return summary
+
+    if approved_plan_body is None or approved_plan_meta is None:
         summary = {
-            "status": "failed",
-            "reason": review_error or "Codex review failed.",
+            "status": "stop_plan_max_iterations",
+            "reason": f"Reached max plan iterations ({max_plan_iterations}).",
             "run_dir": str(paths.root),
+            "plan_iterations_used": max_plan_iterations,
+            "implementation_iterations_used": 0,
+            "unresolved_must_fix_count": plan_must_fix_count(plan_reviews[-1]) if plan_reviews else 0,
         }
-        write_json(paths.final_summary_json, summary)
-        write_text(paths.final_summary_md, f"# Codex Remediation Loop\n\nStatus: failed\n\nReason: {summary['reason']}\n")
+        write_final_summary(paths, summary)
         return summary
-    write_json(paths.review, review_data)
 
-    verifications: list[dict[str, Any]] = []
-    latest = None
-    for iteration in range(1, max_iterations + 1):
-        iteration_dir = paths.iteration_dir(iteration)
+    verification_history: list[dict[str, Any]] = []
+    latest_verification: dict[str, Any] | None = None
+
+    for iteration in range(1, max_implementation_iterations + 1):
+        iteration_dir = paths.implementation_iteration_dir(iteration)
         iteration_dir.mkdir(parents=True, exist_ok=True)
         before_manifest = workspace_manifest(workspace)
+        approved_plan_before = plan.read_text(encoding="utf-8")
+
         implement_prompt = implementation_prompt(
             plan_path=plan,
-            plan_body=plan_body,
-            review=review_data,
-            latest_verification=latest,
+            approved_plan_body=approved_plan_body,
+            latest_verification=latest_verification,
             iteration=iteration,
         )
         write_text(iteration_dir / "claude-prompt.txt", implement_prompt)
@@ -564,11 +752,21 @@ def run_loop(plan: Path, workspace: Path, max_iterations: int) -> dict[str, Any]
                 "status": "failed",
                 "reason": claude_error,
                 "run_dir": str(paths.root),
-                "iteration": iteration,
+                "plan_iterations_used": approved_plan_meta["plan_iteration"],
+                "implementation_iterations_used": iteration - 1,
+                "unresolved_must_fix_count": unresolved_must_fix_count(latest_verification) if latest_verification else 0,
+                "approved_plan_path": str(paths.approved_plan),
             }
-            write_json(paths.final_summary_json, summary)
-            write_text(paths.final_summary_md, f"# Codex Remediation Loop\n\nStatus: failed\n\nReason: {summary['reason']}\n")
+            write_final_summary(paths, summary)
             return summary
+
+        plan_mutation_detected = plan.read_text(encoding="utf-8") != approved_plan_body
+        if plan_mutation_detected:
+            write_text(iteration_dir / "plan-mutation-before-restore.md", plan.read_text(encoding="utf-8"))
+            plan.write_text(approved_plan_body, encoding="utf-8")
+            write_text(iteration_dir / "plan-restored.md", approved_plan_body)
+        elif approved_plan_before != approved_plan_body:
+            plan.write_text(approved_plan_body, encoding="utf-8")
 
         after_manifest = workspace_manifest(workspace)
         changed = changed_files(before_manifest, after_manifest)
@@ -594,30 +792,30 @@ def run_loop(plan: Path, workspace: Path, max_iterations: int) -> dict[str, Any]
                     {
                         "id": "PLAN",
                         "severity": "must_fix",
-                        "reason": "The plan has not been implemented in the workspace.",
+                        "reason": "The frozen approved plan has not been implemented in the workspace.",
                         "missing_acceptance_criteria": [
-                            "Apply code changes required by the plan",
-                            "Get validation to pass"
-                        ]
+                            "Apply code changes required by the approved plan",
+                            "Get validation to pass",
+                        ],
                     }
                 ],
                 "regressions": [],
                 "next_actions": [
-                    "Implement the plan itself before attempting another verification.",
-                    "Make file edits that address the failing validation."
-                ]
+                    "Implement the frozen approved plan itself before attempting another verification.",
+                    "Make file edits that address the failing validation.",
+                ],
             }
         else:
             verification_prompt_text = verification_prompt(
                 plan_path=plan,
-                plan_body=plan_body,
-                review=review_data,
-                latest_verification=latest,
+                approved_plan_body=approved_plan_body,
+                latest_verification=latest_verification,
                 validation=validation,
                 changed=changed,
                 diff_text=diff_text,
                 snapshots=snapshots,
                 iteration=iteration,
+                plan_mutation_detected=plan_mutation_detected,
             )
             verification_data, verification_error = run_codex_structured(
                 prompt=verification_prompt_text,
@@ -625,16 +823,19 @@ def run_loop(plan: Path, workspace: Path, max_iterations: int) -> dict[str, Any]
                 cwd=workspace,
                 model=codex_model,
                 timeout_seconds=DEFAULT_CODEX_TIMEOUT_SECONDS,
+                sandbox="read-only",
             )
             if verification_error or verification_data is None:
                 summary = {
                     "status": "failed",
                     "reason": verification_error or "Codex verification failed.",
                     "run_dir": str(paths.root),
-                    "iteration": iteration,
+                    "plan_iterations_used": approved_plan_meta["plan_iteration"],
+                    "implementation_iterations_used": iteration - 1,
+                    "unresolved_must_fix_count": unresolved_must_fix_count(latest_verification) if latest_verification else 0,
+                    "approved_plan_path": str(paths.approved_plan),
                 }
-                write_json(paths.final_summary_json, summary)
-                write_text(paths.final_summary_md, f"# Codex Remediation Loop\n\nStatus: failed\n\nReason: {summary['reason']}\n")
+                write_final_summary(paths, summary)
                 return summary
 
         if verification_prompt_text:
@@ -642,45 +843,44 @@ def run_loop(plan: Path, workspace: Path, max_iterations: int) -> dict[str, Any]
 
         verification_data["iteration"] = iteration
         verification_data["validation_status"] = validation["status"]
+        if plan_mutation_detected:
+            append_plan_mutation_regression(verification_data, plan)
         write_json(iteration_dir / "verification.json", verification_data)
-        verifications.append(verification_data)
-        latest = verification_data
+        verification_history.append(verification_data)
+        latest_verification = verification_data
 
-        decision = controller_decision(verifications=verifications, iteration=iteration, max_iterations=max_iterations)
+        decision = implementation_controller_decision(
+            verifications=verification_history,
+            iteration=iteration,
+            max_iterations=max_implementation_iterations,
+        )
         write_json(iteration_dir / "controller-decision.json", decision)
         if decision["action"] != "continue":
             summary = {
                 "status": decision["action"],
                 "reason": decision["reason"],
                 "run_dir": str(paths.root),
-                "iterations_used": iteration,
-                "review_verdict": review_data.get("verdict"),
+                "plan_iterations_used": approved_plan_meta["plan_iteration"],
+                "implementation_iterations_used": iteration,
                 "unresolved_must_fix_count": unresolved_must_fix_count(verification_data),
                 "latest_summary": verification_data.get("summary"),
+                "approved_plan_path": str(paths.approved_plan),
+                "approved_plan_sha256": approved_plan_meta["approved_plan_sha256"],
             }
-            write_json(paths.final_summary_json, summary)
-            write_text(
-                paths.final_summary_md,
-                (
-                    "# Codex Remediation Loop\n\n"
-                    f"Status: {summary['status']}\n\n"
-                    f"Reason: {summary['reason']}\n\n"
-                    f"Run dir: {summary['run_dir']}\n\n"
-                    f"Iterations used: {summary['iterations_used']}\n\n"
-                    f"Unresolved must-fix: {summary['unresolved_must_fix_count']}\n\n"
-                    f"Latest verification summary: {summary['latest_summary']}\n"
-                ),
-            )
+            write_final_summary(paths, summary)
             return summary
 
     summary = {
         "status": "stop_max_iterations",
-        "reason": f"Reached max iterations ({max_iterations}).",
+        "reason": f"Reached max implementation iterations ({max_implementation_iterations}).",
         "run_dir": str(paths.root),
-        "iterations_used": max_iterations,
+        "plan_iterations_used": approved_plan_meta["plan_iteration"],
+        "implementation_iterations_used": max_implementation_iterations,
+        "unresolved_must_fix_count": unresolved_must_fix_count(latest_verification) if latest_verification else 0,
+        "approved_plan_path": str(paths.approved_plan),
+        "approved_plan_sha256": approved_plan_meta["approved_plan_sha256"],
     }
-    write_json(paths.final_summary_json, summary)
-    write_text(paths.final_summary_md, f"# Codex Remediation Loop\n\nStatus: stop_max_iterations\n\nRun dir: {summary['run_dir']}\n")
+    write_final_summary(paths, summary)
     return summary
 
 
@@ -688,10 +888,17 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Bounded Claude/Codex remediation loop")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    loop = subparsers.add_parser("loop", help="Run the full review -> implement -> verify loop")
+    loop = subparsers.add_parser("loop", help="Run the two-phase plan approval -> implementation verification loop")
     loop.add_argument("--plan", required=True, help="Absolute or workspace-relative path to the plan file")
     loop.add_argument("--cwd", default=".", help="Workspace root")
-    loop.add_argument("--max-iterations", type=int, default=DEFAULT_MAX_ITERATIONS)
+    loop.add_argument("--max-iterations", type=int, default=DEFAULT_MAX_ITERATIONS, help="Default cap applied to both phases")
+    loop.add_argument("--max-plan-iterations", type=int, default=None, help="Override plan refinement loop cap")
+    loop.add_argument(
+        "--max-implementation-iterations",
+        type=int,
+        default=None,
+        help="Override implementation remediation loop cap",
+    )
 
     detect = subparsers.add_parser("detect-validation", help="Print auto-detected validation commands")
     detect.add_argument("--cwd", default=".", help="Workspace root")
@@ -710,9 +917,11 @@ def main() -> int:
     plan = Path(args.plan).expanduser()
     if not plan.is_absolute():
         plan = (workspace / plan).resolve()
-    summary = run_loop(plan, workspace, args.max_iterations)
+    max_plan_iterations = args.max_plan_iterations or args.max_iterations
+    max_implementation_iterations = args.max_implementation_iterations or args.max_iterations
+    summary = run_loop(plan, workspace, max_plan_iterations, max_implementation_iterations)
     print(json.dumps(summary, indent=2))
-    return 0 if summary["status"] in {"stop_resolved", "continue"} else 1
+    return 0 if summary["status"] == "stop_resolved" else 1
 
 
 if __name__ == "__main__":

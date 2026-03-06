@@ -8,15 +8,16 @@ Make Claude Code work against an independent verifier instead of its own self-co
 | Agent | Best for | Result |
 | --- | --- | --- |
 | `codex-plan-review` | Getting a second opinion before approval | Codex reviews the plan and returns findings |
-| `codex-remediation-loop` | Driving a risky plan to completion | Codex reviews, Claude edits, Codex verifies, controller stops on resolution or failure |
+| `codex-remediation-loop` | Driving a risky plan all the way through planning and implementation | Codex refines and approves the plan, Claude implements against the frozen approved plan, Codex verifies the actual diff |
 
 ## Why Use It
 
 - independent review instead of self-approval
-- bounded automation with a hard stop at 5 iterations
-- verification against actual file changes and validation output
+- bounded automation with a hard stop at 5 plan iterations and 5 implementation iterations
+- Codex can rewrite the plan directly before any code work starts
+- implementation is verified against the frozen approved plan, actual file changes, and validation output
 - explicit failure modes: blocked, stagnating, max-iterations, review unavailable
-- safe defaults: Codex runs `read-only`; Claude implementer gets edit tools only
+- safe defaults: Codex edits the plan only; Claude edits code only; validation is controller-owned
 
 ## Install
 
@@ -41,7 +42,7 @@ In Claude Code:
    - `codex-remediation-loop`
 3. if they do not appear immediately, restart Claude Code once and run `/agents` again
 
-<img src="./assets/agents-view.png" alt="Claude Code /agents view showing codex-plan-review and codex-remediation-loop" width="860" />
+<img src="./assets/agents-view.png" alt="Claude Code /agents view showing codex-plan-review and codex-remediation-loop" width="680" />
 
 ## Remediation Loop Workflow
 
@@ -55,7 +56,7 @@ One-shot plan review:
 Use the codex-plan-review subagent to review /absolute/path/to/PLAN.md
 ```
 
-Full remediation loop:
+Full two-phase remediation loop:
 
 ```text
 Use the codex-remediation-loop subagent to run the remediation loop for /absolute/path/to/PLAN.md
@@ -101,11 +102,12 @@ Example:
 
 ## Safety Model
 
-- Codex runs in `read-only`
+- Codex edits the plan only; it never edits code
 - Claude implementer does not get shell access
-- plan review reads the real plan file, not a Claude summary
+- the approved plan is frozen before implementation starts
+- if Claude mutates the frozen plan during implementation, the controller restores it and flags it as a regression
 - failures are explicit; the system does not pretend a review happened
-- review results are cached by content hash
+- review results are cached by content hash for one-shot plan review
 
 ## Uninstall
 

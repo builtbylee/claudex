@@ -1,11 +1,11 @@
 ---
 name: codex-remediation-loop
-description: Use this skill when you want a fully automated Claude/Codex remediation loop for an implementation plan. It is for risky Markdown plans where Codex should review, Claude should implement, Codex should verify, and the loop should continue until must-fix findings are resolved or the bounded iteration limit is reached.
+description: Use this skill when you want the full two-phase Claude/Codex remediation workflow for a Markdown implementation plan. Codex refines the plan until approval, the approved plan is frozen, Claude implements against it, and Codex verifies the implementation until resolved or the bounded iteration limits are hit.
 ---
 
 # Codex Remediation Loop
 
-Use this when you want the full bounded `review -> implement -> verify` workflow.
+Use this when you want the full bounded `plan refine -> freeze -> implement -> verify` workflow.
 
 ## Invocation
 
@@ -23,16 +23,17 @@ python3 ~/.claude/tools/codex-remediation-loop/codex_remediation_loop.py loop --
 
 ## What It Does
 
-1. Codex reviews the plan and emits structured findings
-2. Claude edits the repo against those findings
-3. the controller runs validation commands
-4. Codex verifies the real diff and validation output
-5. the loop stops on resolved, blocked, stagnating, or iteration 5
+1. Codex reviews and edits the plan directly until it is approved or the plan loop hits its bound
+2. the controller freezes the approved plan as the implementation source of truth
+3. Claude implements against the frozen plan
+4. the controller runs validation commands
+5. Codex verifies the real diff and validation output against the frozen plan
+6. the implementation loop stops on resolved, blocked, stagnating, or the bounded iteration limit
 
 ## Control Rules
 
 - Codex default model: `gpt-5.4`
 - Claude implementation model: `opus`
-- Codex is `read-only`
+- Codex may edit the plan only; it never edits code
 - Claude implementer gets edit tools only, not shell access
-- verification is driven by JSON schemas and stable finding IDs
+- implementation verification is driven by JSON schemas, stable finding IDs, and the frozen approved-plan snapshot
