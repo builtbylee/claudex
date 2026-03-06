@@ -31,6 +31,7 @@
         "required": [
           "id",
           "severity",
+          "category",
           "reason",
           "missing_acceptance_criteria"
         ],
@@ -44,6 +45,15 @@
               "must_fix",
               "should_fix",
               "advisory"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "structural_mismatch",
+              "missing_logic",
+              "wrong_location",
+              "behavioral_divergence"
             ]
           },
           "reason": {
@@ -66,6 +76,7 @@
         "required": [
           "id",
           "severity",
+          "category",
           "title",
           "reason"
         ],
@@ -79,6 +90,15 @@
               "must_fix",
               "should_fix",
               "advisory"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "structural_mismatch",
+              "missing_logic",
+              "wrong_location",
+              "behavioral_divergence"
             ]
           },
           "title": {

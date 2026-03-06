@@ -203,8 +203,58 @@ sys.stdout.write("implemented\\n")
         }
         loop.append_plan_mutation_regression(verification, Path("/tmp/PLAN.md"))
         self.assertEqual(verification["regressions"][0]["id"], "R_PLAN_MUTATION")
+        self.assertEqual(verification["regressions"][0]["category"], "structural_mismatch")
         self.assertIn("restored", verification["summary"])
         self.assertIn("Do not edit the frozen approved plan", verification["next_actions"][0])
+
+    def test_compact_review_and_verification_preserve_categories(self) -> None:
+        review = {
+            "iteration": 1,
+            "overall_status": "continue",
+            "summary": "needs work",
+            "findings": [
+                {
+                    "id": "F1",
+                    "severity": "must_fix",
+                    "category": "missing_logic",
+                    "title": "missing rollback",
+                    "details": "add rollback",
+                    "acceptance_criteria": ["rollback exists"],
+                }
+            ],
+            "next_actions": ["fix rollback"],
+        }
+        verification = {
+            "iteration": 2,
+            "overall_status": "continue",
+            "ready_to_approve": False,
+            "validation_status": "failed",
+            "summary": "still open",
+            "unresolved": [
+                {
+                    "id": "F1",
+                    "severity": "must_fix",
+                    "category": "wrong_location",
+                    "reason": "changed wrong file",
+                    "missing_acceptance_criteria": ["edit correct file"],
+                }
+            ],
+            "regressions": [
+                {
+                    "id": "R1",
+                    "severity": "should_fix",
+                    "category": "behavioral_divergence",
+                    "title": "behavior changed",
+                    "reason": "edge case broken",
+                }
+            ],
+            "next_actions": ["move fix"],
+        }
+        compact_review = loop.compact_plan_review(review)
+        compact_verification = loop.compact_verification(verification)
+        self.assertEqual(compact_review["findings"][0]["category"], "missing_logic")
+        self.assertEqual(compact_verification["unresolved"][0]["category"], "wrong_location")
+        self.assertEqual(compact_verification["regressions"][0]["category"], "behavioral_divergence")
 
     def test_write_and_load_plan_cache_round_trip(self) -> None:
         source_plan = "# Plan\n\nShip feature.\n"
@@ -222,6 +272,33 @@ sys.stdout.write("implemented\\n")
         self.assertFalse(result["passed"])
         self.assertEqual(result["exit_code"], None)
         self.assertIn("Timed out", result["error"])
+
+    def test_snapshot_reason_omits_snapshots_when_git_diff_is_available(self) -> None:
+        workspace = self.root / "workspace"
+        workspace.mkdir()
+        subprocess.run(["git", "init"], cwd=str(workspace), check=True, capture_output=True, text=True)
+        tracked = workspace / "tracked.txt"
+        tracked.write_text("before\n", encoding="utf-8")
+        subprocess.run(["git", "add", "tracked.txt"], cwd=str(workspace), check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "init"],
+            cwd=str(workspace),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        tracked.write_text("after\n", encoding="utf-8")
+        diff_text = loop.git_diff(workspace, ["tracked.txt"])
+        self.assertIsNone(loop.snapshot_reason(workspace, ["tracked.txt"], diff_text))
+
+    def test_snapshot_reason_requests_snapshots_for_untracked_changes(self) -> None:
+        workspace = self.root / "workspace"
+        workspace.mkdir()
+        subprocess.run(["git", "init"], cwd=str(workspace), check=True, capture_output=True, text=True)
+        untracked = workspace / "new.txt"
+        untracked.write_text("hello\n", encoding="utf-8")
+        reason = loop.snapshot_reason(workspace, ["new.txt"], "")
+        self.assertIn("untracked paths", reason or "")
 
     def test_cli_resolves_end_to_end_with_stubbed_clis(self) -> None:
         workspace = self.root / "workspace"

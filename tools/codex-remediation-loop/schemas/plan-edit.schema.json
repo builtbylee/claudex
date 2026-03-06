@@ -29,6 +29,7 @@
         "required": [
           "id",
           "severity",
+          "category",
           "title",
           "details",
           "acceptance_criteria"
@@ -43,6 +44,15 @@
               "must_fix",
               "should_fix",
               "advisory"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "structural_mismatch",
+              "missing_logic",
+              "wrong_location",
+              "behavioral_divergence"
             ]
           },
           "title": {

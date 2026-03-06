@@ -131,6 +131,7 @@ def compact_plan_review(review: dict[str, Any] | None) -> dict[str, Any] | None:
             {
                 "id": item.get("id"),
                 "severity": item.get("severity"),
+                "category": item.get("category"),
                 "title": item.get("title"),
                 "acceptance_criteria": item.get("acceptance_criteria", []),
             }
@@ -153,6 +154,7 @@ def compact_verification(verification: dict[str, Any] | None) -> dict[str, Any] 
             {
                 "id": item.get("id"),
                 "severity": item.get("severity"),
+                "category": item.get("category"),
                 "reason": item.get("reason"),
                 "missing_acceptance_criteria": item.get("missing_acceptance_criteria", []),
             }
@@ -162,6 +164,7 @@ def compact_verification(verification: dict[str, Any] | None) -> dict[str, Any] 
             {
                 "id": item.get("id"),
                 "severity": item.get("severity"),
+                "category": item.get("category"),
                 "reason": item.get("reason"),
             }
             for item in verification.get("regressions", [])[:8]
@@ -357,6 +360,31 @@ def git_diff(workspace: Path, changed: list[str]) -> str:
     return completed.stdout[:20_000]
 
 
+def untracked_changed_files(workspace: Path, changed: list[str]) -> list[str]:
+    if not changed or not git_repo(workspace):
+        return []
+    cmd = ["git", "ls-files", "--others", "--exclude-standard", "--"] + changed
+    completed = subprocess.run(cmd, cwd=str(workspace), text=True, capture_output=True, check=False)
+    if completed.returncode != 0:
+        return []
+    return sorted(line.strip() for line in completed.stdout.splitlines() if line.strip())
+
+
+def snapshot_reason(workspace: Path, changed: list[str], diff_text: str) -> str | None:
+    if not changed:
+        return None
+    if not git_repo(workspace):
+        return "workspace is not a git repository"
+    untracked = untracked_changed_files(workspace, changed)
+    if untracked:
+        preview = ", ".join(untracked[:6])
+        suffix = "..." if len(untracked) > 6 else ""
+        return f"changed files include untracked paths: {preview}{suffix}"
+    if not diff_text.strip():
+        return "git diff is empty or unavailable for the changed files"
+    return None
+
+
 def text_diff(before: str, after: str, *, from_name: str, to_name: str) -> str:
     return "".join(
         difflib.unified_diff(
@@ -489,6 +517,7 @@ def plan_review_prompt(
         "- approved: the edited plan is ready to freeze and implement\n"
         "- continue: you improved the plan but meaningful issues still remain\n"
         "- blocked: the plan cannot be brought to approval without missing requirements or contradictory constraints\n"
+        "Assign one category to every finding: structural_mismatch, missing_logic, wrong_location, or behavioral_divergence.\n"
         "Reuse previous finding IDs when the same issue persists.\n"
         "If you fix a finding in the plan, remove it from the output instead of renaming it.\n\n"
         f"Iteration: {iteration}\n"
@@ -520,6 +549,11 @@ def implementation_prompt(
         f"Do not edit the plan file at {plan_path}. The controller will revert it if you change it.\n"
         "Do not run tests, linters, build commands, or shell commands. The controller will do that.\n"
         "Read relevant files before editing. Prefer the smallest coherent set of code changes that satisfies the approved plan and all open must-fix items.\n"
+        "Use the finding categories to fix the right class of problem:\n"
+        "- structural_mismatch: the change does not match the approved plan structure\n"
+        "- missing_logic: behavior or logic is incomplete\n"
+        "- wrong_location: the change landed in the wrong file or layer\n"
+        "- behavioral_divergence: the code exists but does not satisfy the intended behavior\n"
         "If the approved plan is contradictory or impossible from the repo context, say that plainly in your short response.\n"
         "Respond with a short plain-text summary only.\n\n"
         f"Iteration: {iteration}\n"
@@ -541,6 +575,7 @@ def verification_prompt(
     changed: list[str],
     diff_text: str,
     snapshots: list[dict[str, str]],
+    snapshot_context: str,
     iteration: int,
     plan_mutation_detected: bool,
 ) -> str:
@@ -548,6 +583,7 @@ def verification_prompt(
         "Verify whether the implementation work satisfies the frozen approved plan.\n"
         "Return only structured output matching the schema.\n"
         "Use original unresolved IDs exactly when they persist. You may add regression IDs like R1 for new regressions.\n"
+        "Assign one category to every unresolved item and regression: structural_mismatch, missing_logic, wrong_location, or behavioral_divergence.\n"
         "Be strict: unresolved means unresolved. blocked means further progress requires missing context or contradictory requirements.\n\n"
         f"Iteration: {iteration}\n"
         f"Frozen plan path: {plan_path}\n"
@@ -562,8 +598,9 @@ def verification_prompt(
         f"{json.dumps(changed, indent=2)}\n\n"
         "Git diff:\n"
         f"{diff_text or '[no git diff available]'}\n\n"
-        "Current file snapshots:\n"
-        f"{json.dumps(snapshots, indent=2)}"
+        "File snapshot context:\n"
+        f"{snapshot_context}\n"
+        f"{json.dumps(snapshots, indent=2) if snapshots else '[]'}"
     )
 
 
@@ -711,6 +748,7 @@ def append_plan_mutation_regression(verification: dict[str, Any], plan_path: Pat
         {
             "id": "R_PLAN_MUTATION",
             "severity": "must_fix",
+            "category": "structural_mismatch",
             "title": "Frozen approved plan was modified",
             "reason": f"Claude changed the frozen approved plan during implementation: {plan_path}",
         }
@@ -925,7 +963,9 @@ def run_loop(
 
         diff_text = git_diff(workspace, changed)
         write_text(iteration_dir / "git-diff.patch", diff_text)
-        snapshots = file_snapshots(workspace, changed)
+        snapshots_reason = snapshot_reason(workspace, changed, diff_text)
+        snapshots = file_snapshots(workspace, changed) if snapshots_reason else []
+        snapshot_context = snapshots_reason or "omitted because git diff covers the tracked changes"
         write_json(iteration_dir / "file-snapshots.json", {"files": snapshots})
 
         if not changed and validation["status"] == "failed":
@@ -938,6 +978,7 @@ def run_loop(
                     {
                         "id": "PLAN",
                         "severity": "must_fix",
+                        "category": "missing_logic",
                         "reason": "The frozen approved plan has not been implemented in the workspace.",
                         "missing_acceptance_criteria": [
                             "Apply code changes required by the approved plan",
@@ -960,6 +1001,7 @@ def run_loop(
                 changed=changed,
                 diff_text=diff_text,
                 snapshots=snapshots,
+                snapshot_context=snapshot_context,
                 iteration=iteration,
                 plan_mutation_detected=plan_mutation_detected,
             )

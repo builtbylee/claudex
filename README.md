@@ -26,6 +26,7 @@ What `/claudex` does:
 - bounded automation with a hard stop at 5 plan iterations and 5 implementation iterations
 - Codex can rewrite the plan directly before any code work starts
 - implementation is verified against the frozen approved plan, actual file changes, and validation output
+- Codex findings are categorized so Claude can fix the right class of problem, not just the symptom
 - repeated runs are faster because approved-plan reuse is cached by plan hash
 - non-build validation commands run concurrently to reduce loop latency without weakening the final gate
 - explicit failure modes: blocked, stagnating, max-iterations, review unavailable
@@ -136,6 +137,7 @@ Example:
 - if Claude mutates the frozen plan during implementation, the controller restores it and flags it as a regression
 - failures are explicit; the system does not pretend a review happened
 - one-shot reviews and approved-plan reuse are cached by content hash
+- verification is diff-first; file snapshots are only included when git diff coverage is incomplete
 
 ## Uninstall
 
