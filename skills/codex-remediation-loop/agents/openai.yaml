@@ -1,5 +1,5 @@
 name: codex-remediation-loop
-label: Codex Remediation Loop
+label: Claudex Remediation Loop
 description:
-  default_prompt: "Use $codex-remediation-loop to run the two-phase Codex/Claude remediation loop for a plan file."
+  default_prompt: "Use $codex-remediation-loop to run the Claudex two-phase remediation loop for a plan file."
 allow_implicit_invocation: true

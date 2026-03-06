@@ -3,9 +3,9 @@ name: codex-remediation-loop
 description: Use this skill when you want the full two-phase Claude/Codex remediation workflow for a Markdown implementation plan. Codex refines the plan until approval, the approved plan is frozen, Claude implements against it, and Codex verifies the implementation until resolved or the bounded iteration limits are hit.
 ---
 
-# Codex Remediation Loop
+# Claudex Remediation Loop
 
-Use this when you want the full bounded `plan refine -> freeze -> implement -> verify` workflow.
+Use this when you want the full Claudex `plan refine -> freeze -> implement -> verify` workflow.
 
 ## Invocation
 

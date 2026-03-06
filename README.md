@@ -1,16 +1,16 @@
-# Claude Codex Remediation Loop
+# Claudex
 
 [![Test](https://github.com/builtbylee/claude-codex-remediation-loop/actions/workflows/test.yml/badge.svg)](https://github.com/builtbylee/claude-codex-remediation-loop/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-black.svg)](./LICENSE)
 
-Make Claude Code work against an independent verifier instead of its own self-confidence.
+Claudex gives Claude Code an independent Codex reviewer so plans and implementations are checked before they ship.
 
 | Agent | Best for | Result |
 | --- | --- | --- |
 | `codex-plan-review` | Getting a second opinion before approval | Codex reviews the plan and returns findings |
 | `codex-remediation-loop` | Driving a risky plan all the way through planning and implementation | Codex refines and approves the plan, Claude implements against the frozen approved plan, Codex verifies the actual diff |
 
-## Why Use It
+## Why Claudex
 
 - independent review instead of self-approval
 - bounded automation with a hard stop at 5 plan iterations and 5 implementation iterations

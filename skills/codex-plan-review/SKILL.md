@@ -3,9 +3,9 @@ name: codex-plan-review
 description: Use this skill when a Claude Code plan file needs a Codex second opinion. It is for implementation plans, migration plans, rollout plans, or any risky Markdown plan where you want a concrete review focused on hidden assumptions, security, testing, rollback, and operational gaps.
 ---
 
-# Codex Plan Review
+# Claudex Plan Review
 
-Use this when you want a safe Codex second opinion on a Markdown plan file before approval or implementation.
+Use this when you want a safe Claudex second opinion on a Markdown plan file before approval or implementation.
 
 ## Invocation
 

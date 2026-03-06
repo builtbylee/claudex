@@ -1,6 +1,6 @@
 ---
 name: codex-plan-review
-description: Use this subagent when a Markdown implementation plan needs a Codex-backed second opinion. It is for PLAN.md, IMPLEMENTATION_PLAN.md, EXECUTION_PLAN.md, ARCHITECTURE_PLAN.md, or other risky rollout plans where you want a concrete review focused on missing steps, hidden assumptions, security, rollback, observability, and testing gaps.
+description: Use this subagent when a Markdown implementation plan needs a Claudex-backed second opinion. It is for PLAN.md, IMPLEMENTATION_PLAN.md, EXECUTION_PLAN.md, ARCHITECTURE_PLAN.md, or other risky rollout plans where you want a concrete review focused on missing steps, hidden assumptions, security, rollback, observability, and testing gaps.
 tools: Bash, Read, Glob, Grep
 model: opus
 ---
