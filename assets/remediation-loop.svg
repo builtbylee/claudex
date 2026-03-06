@@ -5,8 +5,8 @@
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
       <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0f172a" flood-opacity="0.08"/>
     </filter>
-    <marker id="arrow" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto">
-      <path d="M0 0L12 6L0 12V0Z" fill="#334155"/>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0 0L9 4.5L0 9V0Z" fill="#334155"/>
     </marker>
     <style>
       .title { font: 700 30px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
@@ -15,7 +15,7 @@
       .body { font: 500 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
       .badge { font: 700 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: white; }
       .label { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; }
-      .line { stroke: #334155; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; fill: none; marker-end: url(#arrow); }
+      .line { stroke: #334155; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; fill: none; marker-end: url(#arrow); }
       .panel { filter: url(#shadow); }
     </style>
   </defs>
@@ -93,10 +93,10 @@
   <path d="M600 814V850" class="line"/>
   <path d="M600 814V834L960 834V850" class="line"/>
 
-  <path d="M750 896H1010C1042 896 1068 870 1068 838V476C1068 444 1042 418 1010 418H910" class="line"/>
+  <path d="M750 896H1128C1144 896 1158 882 1158 866V476C1158 444 1132 418 1100 418H910" class="line"/>
 
   <text x="220" y="828" class="label">Resolved</text>
   <text x="620" y="838" class="label">Continue</text>
   <text x="932" y="828" class="label">Stop</text>
-  <text x="1084" y="650" class="label">Loop</text>
+  <text x="1172" y="650" class="label">Loop</text>
 </svg>
