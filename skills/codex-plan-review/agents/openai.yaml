@@ -1,0 +1,6 @@
+interface:
+  display_name: "Codex Plan Review"
+  short_description: "Safe second-opinion plan review"
+  default_prompt: "Use $codex-plan-review to get a safe Codex second opinion on a plan file."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+{
+  "name": "claude-codex-remediation-loop",
+  "version": "1.0.0",
+  "description": "Codex-backed plan review and bounded remediation workflows for Claude Code",
+  "skills": ["skills/codex-plan-review", "skills/codex-remediation-loop"]
+}

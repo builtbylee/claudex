@@ -1,0 +1,102 @@
+{
+  "type": "object",
+  "required": [
+    "overall_status",
+    "ready_to_approve",
+    "summary",
+    "unresolved",
+    "regressions",
+    "next_actions"
+  ],
+  "properties": {
+    "overall_status": {
+      "type": "string",
+      "enum": [
+        "resolved",
+        "continue",
+        "blocked",
+        "insufficient_evidence"
+      ]
+    },
+    "ready_to_approve": {
+      "type": "boolean"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "reason",
+          "missing_acceptance_criteria"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "must_fix",
+              "should_fix",
+              "advisory"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "missing_acceptance_criteria": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "regressions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "title",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "must_fix",
+              "should_fix",
+              "advisory"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

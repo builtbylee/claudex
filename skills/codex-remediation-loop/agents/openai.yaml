@@ -1,0 +1,6 @@
+interface:
+  display_name: "Codex Remediation Loop"
+  short_description: "Autonomous review-implement-verify loop"
+  default_prompt: "Use $codex-remediation-loop to run a bounded Codex/Claude remediation loop for a plan file."
+policy:
+  allow_implicit_invocation: true
