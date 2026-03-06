@@ -14,3 +14,41 @@ jobs:
           python-version: "3.12"
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Smoke test install and uninstall
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/fake-home"
+          mkdir -p "$HOME"
+
+          ./install.sh
+
+          test -f "$HOME/.claude/agents/codex-plan-review.md"
+          test -f "$HOME/.claude/agents/codex-remediation-loop.md"
+          test -f "$HOME/.claude/hooks/codex_plan_review.py"
+          test -f "$HOME/.claude/tools/codex-remediation-loop/codex_remediation_loop.py"
+          test -f "$HOME/.claude/settings.json"
+
+          ./install.sh
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          settings = json.loads((Path(os.environ["HOME"]) / ".claude" / "settings.json").read_text())
+          entries = settings["hooks"]["PostToolUse"]
+          count = 0
+          for entry in entries:
+              for hook in entry.get("hooks", []):
+                  if hook.get("command", "").endswith("codex_plan_review.py"):
+                      count += 1
+          assert count == 1, count
+          PY
+
+          ./uninstall.sh
+
+          test ! -e "$HOME/.claude/agents/codex-plan-review.md"
+          test ! -e "$HOME/.claude/agents/codex-remediation-loop.md"
+          test ! -e "$HOME/.claude/hooks/codex_plan_review.py"
+          test ! -e "$HOME/.claude/tools/codex-remediation-loop"

@@ -41,6 +41,8 @@ In Claude Code:
    - `codex-remediation-loop`
 3. if they do not appear immediately, restart Claude Code once and run `/agents` again
 
+![Claude Code agents view](./assets/agents-view.png)
+
 ## Remediation Loop Workflow
 
 ```mermaid
